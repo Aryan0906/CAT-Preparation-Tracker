@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import sqlite3
 
@@ -19,6 +20,9 @@ from utils import (
     save_settings,
     save_timer_session
 )
+
+# Import the minimal timer with analysis
+from minimal_timer_with_analysis import show_focus_timer
 
 # Comment out Google Sheets integration for now
 # from config import get_sheet_client, setup_google_sheets
@@ -196,7 +200,7 @@ def show_dashboard():
 
     <div class="dashboard-header">
         <div class="logo-container">
-            <img src="https://upload.wikimedia.org/wikipedia/en/thumb/9/95/CAT_logo.png/220px-CAT_logo.png" width="50">
+            <img src="TSA/icons8-greek-helmet-24.png" alt="CAT Prep Logo" style="width: 50px; height: 50px;">
         </div>
         <div class="header-text">
             <h1 class="header-title">CAT Preparation Dashboard</h1>
@@ -235,7 +239,7 @@ def show_dashboard():
     .section-title {
         font-size: 18px;
         font-weight: 600;
-        color: var(--primary-color);
+        color: #000000; /* Changed to black */
         margin: 0;
         letter-spacing: -0.3px;
         text-shadow: 0 1px 1px rgba(255, 255, 255, 0.8);
@@ -246,7 +250,7 @@ def show_dashboard():
         gap: 15px;
     }
     .metric-card {
-        background: white;
+        background: #A9B5DF;
         border-radius: 10px;
         padding: 15px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
@@ -286,12 +290,12 @@ def show_dashboard():
     }
     </style>
 
-    <div class="metric-section" background="lightblue">
+    <div class="metric-section" >
         <div class="section-header" >
             <img src="https://cdn-icons-png.flaticon.com/512/3652/3652191.png" width="24" class="section-icon"   >
-            <h2 class="section-title" background="lightblue" >Study Progress</h2>
+            <h2 class="section-title" style="color: black;"> Study Progress</h2>
         </div>
-        <div class="metrics-container" background="lightblue">
+        <div class="metrics-container">
     """, unsafe_allow_html=True)
 
     # We'll use these columns for the backend calculations, but display using custom HTML
@@ -2125,201 +2129,7 @@ def show_topic_analysis():
     # Close database connection
     conn.close()
 
-def show_focus_timer():
-    st.title("Focus Timer")
-
-    # Initialize database connection
-    conn = init_db()
-    c = conn.cursor()
-
-    # Get user settings
-    c.execute("SELECT * FROM productivity_settings WHERE user_id = 'default'")
-    settings = c.fetchone()
-
-    if settings:
-        focus_duration = settings[1]  # focus_duration
-        break_duration = settings[2]  # break_duration
-    else:
-        # Default settings
-        focus_duration = 25
-        break_duration = 5
-
-        # Insert default settings
-        c.execute("""
-            INSERT INTO productivity_settings
-            (user_id, focus_duration, break_duration, reminder_frequency, notification_enabled, daily_goal, reminder_time)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, ("default", focus_duration, break_duration, "daily", False, 120, "09:00"))
-        conn.commit()
-
-    # Create two columns for timer and settings
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.header("Pomodoro Timer")
-
-        # Timer settings
-        timer_options = {
-            "Focus": focus_duration,
-            "Short Break": break_duration,
-            "Long Break": break_duration * 3
-        }
-
-        # Timer type selector
-        timer_type = st.radio("Timer Type", list(timer_options.keys()))
-        selected_duration = timer_options[timer_type]
-
-        # Topic selector for focus sessions
-        if timer_type == "Focus":
-            topic = st.selectbox(
-                "What are you working on?",
-                ["VARC", "DILR", "Quant", "General Preparation", "Mock Test", "Other"]
-            )
-            subtopic = st.text_input("Subtopic (optional)")
-
-        # Timer display
-        if 'timer_running' not in st.session_state:
-            st.session_state.timer_running = False
-            st.session_state.start_time = None
-            st.session_state.remaining_time = selected_duration * 60
-            st.session_state.elapsed_time = 0
-
-        # Timer controls
-        col1, col2, col3 = st.columns([1, 1, 1])
-
-        with col1:
-            if st.button("Start" if not st.session_state.timer_running else "Pause"):
-                if not st.session_state.timer_running:
-                    st.session_state.timer_running = True
-                    st.session_state.start_time = datetime.now()
-                else:
-                    st.session_state.timer_running = False
-                    st.session_state.elapsed_time += (datetime.now() - st.session_state.start_time).total_seconds()
-                st.rerun()
-
-        with col2:
-            if st.button("Reset"):
-                st.session_state.timer_running = False
-                st.session_state.start_time = None
-                st.session_state.remaining_time = selected_duration * 60
-                st.session_state.elapsed_time = 0
-                st.rerun()
-
-        with col3:
-            if timer_type == "Focus" and st.button("Complete"):
-                if 'start_time' in st.session_state and st.session_state.start_time:
-                    # Calculate time spent
-                    if st.session_state.timer_running:
-                        elapsed = st.session_state.elapsed_time + (datetime.now() - st.session_state.start_time).total_seconds()
-                    else:
-                        elapsed = st.session_state.elapsed_time
-
-                    # Convert to minutes
-                    minutes_spent = int(elapsed / 60)
-
-                    # Save to database
-                    if minutes_spent > 0:
-                        save_study_session(topic, subtopic, minutes_spent)
-                        st.success(f"Saved {minutes_spent} minutes of study on {topic}")
-
-                    # Reset timer
-                    st.session_state.timer_running = False
-                    st.session_state.start_time = None
-                    st.session_state.remaining_time = selected_duration * 60
-                    st.session_state.elapsed_time = 0
-                    st.rerun()
-
-        # Display timer
-        if st.session_state.timer_running:
-            current_elapsed = st.session_state.elapsed_time + (datetime.now() - st.session_state.start_time).total_seconds()
-            remaining = max(0, selected_duration * 60 - current_elapsed)
-        else:
-            remaining = max(0, selected_duration * 60 - st.session_state.elapsed_time)
-
-        # Format time as mm:ss
-        mins, secs = divmod(int(remaining), 60)
-        timer_display = f"{mins:02d}:{secs:02d}"
-
-        # Display large timer
-        st.markdown(f"<h1 style='text-align: center; font-size: 6em;'>{timer_display}</h1>", unsafe_allow_html=True)
-
-        # Progress bar
-        progress = 1 - (remaining / (selected_duration * 60))
-        st.progress(min(1.0, max(0.0, progress)))
-
-        # Display message based on timer type
-        if timer_type == "Focus":
-            st.info(f"Focus on your {topic} studies. Stay concentrated!")
-        elif timer_type == "Short Break":
-            st.success("Take a short break. Stretch, hydrate, and relax your eyes.")
-        else:  # Long Break
-            st.success("Take a longer break. Get up, move around, and refresh your mind.")
-
-    with col2:
-        st.header("Timer Settings")
-
-        # Form for updating timer settings
-        with st.form("timer_settings"):
-            new_focus = st.number_input("Focus Duration (minutes)", min_value=1, max_value=60, value=focus_duration)
-            new_break = st.number_input("Break Duration (minutes)", min_value=1, max_value=30, value=break_duration)
-
-            submitted = st.form_submit_button("Update Settings")
-            if submitted:
-                # Update settings in database
-                c.execute("""
-                    UPDATE productivity_settings
-                    SET focus_duration = ?, break_duration = ?
-                    WHERE user_id = ?
-                """, (new_focus, new_break, "default"))
-                conn.commit()
-                st.success("Settings updated!")
-                st.rerun()
-
-        # Display study session history
-        st.subheader("Recent Study Sessions")
-
-        # Get recent study sessions
-        c.execute("""
-            SELECT date, topic, time_spent
-            FROM study_log
-            ORDER BY date DESC, rowid DESC
-            LIMIT 5
-        """)
-        sessions = c.fetchall()
-
-        if sessions:
-            for date, topic, time_spent in sessions:
-                st.write(f"{date} - {topic}: {time_spent} minutes")
-        else:
-            st.info("No study sessions recorded yet.")
-
-        # Display daily goal progress
-        st.subheader("Daily Goal Progress")
-
-        # Get today's study time
-        today = datetime.now().strftime('%Y-%m-%d')
-        c.execute("""
-            SELECT SUM(time_spent)
-            FROM study_log
-            WHERE date = ?
-        """, (today,))
-        today_minutes = c.fetchone()[0] or 0
-
-        # Get daily goal from settings
-        c.execute("SELECT daily_goal FROM productivity_settings WHERE user_id = 'default'")
-        daily_goal = c.fetchone()
-        if daily_goal:
-            daily_goal = daily_goal[0]
-        else:
-            daily_goal = 120  # Default 2 hours
-
-        # Display progress
-        progress = min(1.0, today_minutes / daily_goal)
-        st.progress(progress)
-        st.write(f"{today_minutes} / {daily_goal} minutes ({int(progress * 100)}%)")
-
-    # Close database connection
-    conn.close()
+# Original focus timer implementation (replaced with timer_api.py)
 
 def show_settings():
     st.title("Settings")
