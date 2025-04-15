@@ -1,9 +1,0 @@
-cat_prep/
-├── venv/
-├── app.py
-├── requirements.txt
-├── styles.css
-├── anki_decks/
-│   ├── CAT_Vocab_Builder.csv
-│   └── CAT_Quant_Formulas.csv
-└── cat_prep.db
